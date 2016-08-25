@@ -40,7 +40,7 @@ def deprocess_net_image(image):
 
     return image
 
-weight_param = dict(lr_mult=1, decay_mult=0.00005)
+weight_param = dict(lr_mult=1, decay_mult=0.000005)
 bias_param   = dict(lr_mult=2, decay_mult=0)
 learned_param = [weight_param, bias_param]
 
@@ -74,51 +74,46 @@ def caffenet(data, train=True, num_classes=1000,
     n = caffe.NetSpec()
     n.data, n.label=L.HDF5Data(batch_size=50,source=data,ntop=2)
     param = learned_param if learn_all else frozen_param
-    n.conv1, n.relu1 = conv_relu(n.data, 3, 1, pad=1, param=param)
-    #n.pool1 = max_pool(n.relu1, 2, stride=2)
-    #n.norm1 = L.LRN(n.pool1, local_size=5, alpha=1e-4, beta=0.75)
-#    n.conv2, n.relu2 = conv_relu(n.relu1, 3, 16,stride=2, pad=1, group=1, param=param)
-#    #n.pool2 = max_pool(n.relu2, 2, stride=2)
-#    #n.norm2 = L.LRN(n.pool2, local_size=5, alpha=1e-4, beta=0.75)
-    n.conv3, n.relu3 = conv_relu(n.conv1, 3, 1, pad=1, group=1, param=param)
-#    #n.pool3 = max_pool(n.relu3, 2, stride=2)
-#    #n.norm3 = L.LRN(n.pool3, local_size=5, alpha=1e-4, beta=0.75)
-#    n.conv4, n.relu4 = conv_relu(n.relu3, 3, 32,stride=2, pad=1, group=1, param=param)
-#    #n.pool4 = max_pool(n.relu4, 2, stride=2)
-#    #n.norm4 = L.LRN(n.pool4, local_size=5, alpha=1e-4, beta=0.75)
-#    n.conv5, n.relu5 = conv_relu(n.relu4, 3, 64, pad=1, group=1, param=param)
-#    #n.pool4 = max_pool(n.relu4, 5, stride=5)
-#    #n.norm5 = L.LRN(n.relu5, local_size=5, alpha=1e-4, beta=0.75)
-#
-#    n.conv6, n.relu6 = conv_relu(n.relu5, 3, 64,stride=2, pad=1, group=1, param=param)    
-#    
-#    
-#    n.deconv4=L.Deconvolution(n.relu6,
-#                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=64,pad_w=0,pad_h=0,group=2,
+    n.conv1, n.relu1 = conv_relu(n.data, 3,32, pad=1, param=param)
+    n.pool1 = max_pool(n.relu1, 2, stride=2)
+    n.norm1 = L.LRN(n.pool1, local_size=5, alpha=1e-4, beta=0.75)
+    n.conv2, n.relu2 = conv_relu(n.norm1, 3, 64,stride=1, pad=1, group=2, param=param)
+    n.pool2 = max_pool(n.relu2, 2, stride=2)
+    n.norm2 = L.LRN(n.pool2, local_size=5, alpha=1e-4, beta=0.75)
+    n.conv3, n.relu3 = conv_relu(n.norm2, 3, 64, pad=1, group=2, param=param)
+    n.conv4, n.relu4 = conv_relu(n.relu3, 3, 128,stride=1, pad=1, group=2, param=param)
+    n.conv5, n.relu5 = conv_relu(n.relu4, 3, 256, pad=1, group=2, param=param)
+    n.pool5 = max_pool(n.relu5, 2, stride=2)
+    n.norm5 = L.LRN(n.pool5, local_size=5, alpha=1e-4, beta=0.75)
+    n.conv6, n.relu6 = conv_relu(n.norm5, 3, 256,stride=1, pad=1, group=1, param=param)    
+    
+    
+    n.deconv4=L.Deconvolution(n.relu6,
+                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=128,pad_w=0,pad_h=0,group=2,
+                                                     weight_filler=dict(type='gaussian', std=0.01),
+                                                     bias_filler=dict(type='constant', value=0)),
+                              param=param)
+                              
+    n.deconv3=L.Deconvolution(n.deconv4,
+                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=128,pad_w=0,pad_h=0,group=2,
+                                                     weight_filler=dict(type='gaussian', std=0.01),
+                                                     bias_filler=dict(type='constant', value=0)),
+                              param=param)
+    n.deconv2=L.Deconvolution(n.deconv3,
+                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=64,pad_w=0,pad_h=0,group=2,
+                                                     weight_filler=dict(type='gaussian', std=0.01),
+                                                     bias_filler=dict(type='constant', value=0)),
+                              param=param)
+#    n.deconv1=L.Deconvolution(n.deconv2,
+#                              convolution_param=dict(kernel_w=3,kernel_h=1,stride=2,num_output=16,pad_w=1,pad_h=0,group=2,
 #                                                     weight_filler=dict(type='gaussian', std=0.01),
-#                                                     bias_filler=dict(type='constant', value=0)),
-#                              param=param)
-#                              
-#    n.deconv3=L.Deconvolution(n.deconv4,
-#                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=32,pad_w=0,pad_h=0,group=2,
-#                                                     weight_filler=dict(type='gaussian', std=0.01),
-#                                                     bias_filler=dict(type='constant', value=0)),
-#                              param=param)
-#    n.deconv2=L.Deconvolution(n.deconv3,
-#                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=32,pad_w=0,pad_h=0,group=2,
-#                                                     weight_filler=dict(type='gaussian', std=0.01),
-#                                                     bias_filler=dict(type='constant', value=0)),
-#                              param=param)
-##    n.deconv1=L.Deconvolution(n.deconv2,
-##                              convolution_param=dict(kernel_w=3,kernel_h=1,stride=2,num_output=16,pad_w=1,pad_h=0,group=2,
-##                                                     weight_filler=dict(type='gaussian', std=0.01),
-##                                                     bias_filler=dict(type='constant', value=0.1)),
-##                              param=param)                              
-#    n.deconv0=L.Deconvolution(n.deconv2,
-#                              convolution_param=dict(kernel_w=3,kernel_h=1,stride=1,num_output=1,pad_w=1,pad_h=0,
-#                                                     weight_filler=dict(type='gaussian', std=0.01),
-#                                                     bias_filler=dict(type='constant', value=0)),
-#                              param=param)
+#                                                     bias_filler=dict(type='constant', value=0.1)),
+#                              param=param)                              
+    n.deconv0=L.Deconvolution(n.deconv2,
+                              convolution_param=dict(kernel_w=3,kernel_h=1,stride=1,num_output=1,pad_w=1,pad_h=0,
+                                                     weight_filler=dict(type='gaussian', std=0.01),
+                                                     bias_filler=dict(type='constant', value=0)),
+                              param=param)
 #    n.deconv1=L.Deconvolution(n.norm2,kernel_size=2,stride=2,num_output=64,pad=0,group=2,
 #                              param=param,weight_filler=dict(type='gaussian', std=0.005),bias_filler=dict(type='constant', value=0.1))
 #    n.deconv0=L.Deconvolution(n.norm2,kernel_size=2,stride=3,num_output=1,pad=1,group=2,
@@ -145,10 +140,10 @@ def caffenet(data, train=True, num_classes=1000,
 #    # give fc8 the name specified by argument `classifier_name`
 #    n.__setattr__(classifier_name, fc8)
     if not train:
-        n.probs = L.Power(n.relu3)
+        n.probs = L.Power(n.deconv0)
     if n.label is not None:
-        n.loss = L.EuclideanLoss(n.conv3, n.data,loss_weight=0.5)
-        n.acc = L.Accuracy(n.conv3, n.data)
+        n.loss = L.EuclideanLoss(n.deconv0, n.label,loss_weight=0.5)
+        n.acc = L.Accuracy(n.deconv0, n.label)
     # write the net to a temporary file and return its filename
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(str(n.to_proto()))
