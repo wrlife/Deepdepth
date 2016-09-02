@@ -15,6 +15,16 @@ from threading import Thread
 from PIL import Image
 
 from tools import SimpleTransformer
+import sys
+sys.path.append("./tools/Colon3D/")
+
+import util
+from scene_manager import SceneManager
+
+from random import randint
+import cv2
+
+WORLD_SCALE=2.60721115767
 
 
 class PascalMultilabelDataLayerSync(caffe.Layer):
@@ -46,9 +56,10 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
         # since we use a fixed input image size, we can shape the data layer
         # once. Else, we'd have to do it in the reshape call.
         top[0].reshape(
-            self.batch_size, 3, params['im_shape'][0], params['im_shape'][1])
+            self.batch_size, 3, 1, params['im_shape'][1])
         # Note the 20 channels (because PASCAL has 20 classes.)
-        top[1].reshape(self.batch_size, 20)
+        if params['case']:
+            top[1].reshape(self.batch_size, 1,1,  params['im_shape'][1])
 
         print_info("PascalMultilabelDataLayerSync", params)
 
@@ -56,16 +67,38 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
         """
         Load data.
         """
+        params = eval(self.param_str)
+        
+        if params['case']:
+            scene_manager = SceneManager(osp.join(params['pascal_root'], 'data/phantom/sfm_results/'))
+            scene_manager.load_cameras()
+            camera = scene_manager.cameras[1] # assume single camera
 
-        im, multilabel = self.batch_loader.load_next_image()
-        for itt in range(self.batch_size):
-            # Use the batch loader to load the next image.
-            #im, multilabel = self.batch_loader.load_next_image()
+            # initial values on unit sphere
+            x, y = camera.get_image_grid()
+            r_scale = np.sqrt(x * x + y * y + 1.)
 
-            # Add directly to the caffe data layer
-            #Split image into 1 d array
-            top[0].data[itt, ...] = im[:,itt,:]
-            top[1].data[itt, ...] = multilabel[:,itt,:]
+             
+            for itt in range(self.batch_size):
+            
+                if itt % 5==0: 
+                    im, multilabel = self.batch_loader.load_next_image_depth(x,y,camera)
+                # Use the batch loader to load the next image.
+                #im, multilabel = self.batch_loader.load_next_image()
+
+                # Add directly to the caffe data layer
+                #Split image into 1 d array
+                i=randint(0,params['im_shape'][0]-1) 
+                top[0].data[itt, ...] = im[:,i,:][:,np.newaxis,:]
+                top[1].data[itt, ...] = multilabel[:,i,:][:,np.newaxis,:]
+
+        else:
+            im = self.batch_loader.load_test_image()
+
+            for itt in range(self.batch_size):
+
+                top[0].data[itt, ...] = im[:,itt,:][:,np.newaxis,:]
+
 
     def reshape(self, bottom, top):
         """
@@ -98,7 +131,7 @@ class BatchLoader(object):
         # get list of image indexes.
         list_file = params['split'] + '.txt'
         self.indexlist = [line.rstrip('\n') for line in open(
-            osp.join(self.pascal_root, 'ImageSets/Main', list_file))]
+            osp.join(self.pascal_root, 'data', list_file))]
         self._cur = 0  # current image
         # this class does some simple data-manipulations
         self.transformer = SimpleTransformer()
@@ -106,7 +139,7 @@ class BatchLoader(object):
         print "BatchLoader initialized with {} images".format(
             len(self.indexlist))
 
-    def load_next_image(self):
+    def load_next_image_depth(self,x,y,camera):
         """
         Load the next image in a batch.
         """
@@ -115,29 +148,44 @@ class BatchLoader(object):
             self._cur = 0
             shuffle(self.indexlist)
 
+        #import pdb;pdb.set_trace();
+
         # Load an image
         index = self.indexlist[self._cur]  # Get the image index
-        image_file_name = index + '.jpg'
+        image_file_name = index
         im = np.asarray(Image.open(
-            osp.join(self.pascal_root, 'JPEGImages', image_file_name)))
+            osp.join(self.pascal_root, 'data/phantom/images', image_file_name)))
         im = scipy.misc.imresize(im, self.im_shape)  # resize
 
         # do a simple horizontal flip as data augmentation
-        flip = np.random.choice(2)*2-1
-        im = im[:, ::flip, :]
+        #flip = np.random.choice(2)*2-1
+        #im = im[:, ::flip, :]
 
         # Load and prepare ground truth
-        multilabel = np.zeros(20).astype(np.float32)
-        anns = load_pascal_annotation(index, self.pascal_root)
-        for label in anns['gt_classes']:
-            # in the multilabel problem we don't care how MANY instances
-            # there are of each class. Only if they are present.
-            # The "-1" is b/c we are not interested in the background
-            # class.
-            multilabel[label - 1] = 1
+    
+        z_gt=np.fromfile(osp.join(self.pascal_root,'data/phantom/gt_surfaces', image_file_name)+'.bin', dtype=np.float32).reshape( camera.height, camera.width)
+        z_gt=cv2.resize(z_gt,(self.im_shape[1],self.im_shape[0]))
+        z_gt=z_gt[np.newaxis,:,:]
 
         self._cur += 1
-        return self.transformer.preprocess(im), multilabel
+        return self.transformer.preprocess(im), z_gt
+    
+    def load_test_image(self):
+         # Did we finish an epoch?
+        if self._cur == len(self.indexlist):
+            self._cur = 0
+            shuffle(self.indexlist)
+
+        #import pdb;pdb.set_trace();
+
+        # Load an image
+        index = self.indexlist[self._cur]  # Get the image index
+        image_file_name = index
+        im = np.asarray(Image.open(
+            osp.join(self.pascal_root, 'data/phantom/test_images', image_file_name)))
+        im = scipy.misc.imresize(im, self.im_shape)  # resize
+
+        return self.transformer.preprocess(im)
 
 
 def load_pascal_annotation(index, pascal_root):

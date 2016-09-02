@@ -4,8 +4,10 @@ Created on Mon Aug 15 23:40:22 2016
 
 @author: wrlife
 """
+caffe_root = '/home/wrlife/bin/caffe/' 
 
 from caffe.proto import caffe_pb2
+from depthnet import *
 
 def solver(train_net_path, test_net_path=None, base_lr=0.001):
     s = caffe_pb2.SolverParameter()
@@ -46,7 +48,7 @@ def solver(train_net_path, test_net_path=None, base_lr=0.001):
     s.weight_decay = 5e-4
 
     # Display the current training loss and accuracy every 1000 iterations.
-    s.display = 10000000
+    s.display = 2000
 
     # Snapshots are files used to store networks we've trained.  Here, we'll
     # snapshot every 10K iterations -- ten times during training.
@@ -62,7 +64,7 @@ def solver(train_net_path, test_net_path=None, base_lr=0.001):
         return f.name
         
         
-def run_solvers(niter, solvers, disp_interval=100):
+def run_solvers(niter, solvers, disp_interval=20):
     """Run solvers for niter iterations,
        returning the loss and accuracy recorded each iteration.
        `solvers` is a list of (name, solver) tuples."""
