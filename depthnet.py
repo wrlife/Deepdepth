@@ -50,8 +50,8 @@ def conv_relu(bottom, ks, nout, stride=1, pad=0, group=1,
               param=learned_param,
               weight_filler=dict(type='xavier', std=0.01),
               bias_filler=dict(type='constant', value=0)):
-    conv = L.Convolution(bottom, kernel_w=ks,kernel_h=1, stride=stride,
-                         num_output=nout, pad_w=pad,pad_h=0, group=group,
+    conv = L.Convolution(bottom, kernel_size=ks, stride=stride,
+                         num_output=nout, pad=pad, group=group,
                          param=param, weight_filler=weight_filler,
                          bias_filler=bias_filler)
     return conv, L.ReLU(conv, in_place=True)
@@ -65,7 +65,7 @@ def fc_relu(bottom, nout, param=learned_param,
     return fc, L.ReLU(fc, in_place=True)
 
 def max_pool(bottom, ks, stride=1):
-    return L.Pooling(bottom, pool=P.Pooling.MAX, kernel_w=ks,kernel_h=1, stride=stride)
+    return L.Pooling(bottom, pool=P.Pooling.MAX, kernel_size=ks, stride=stride)
 
 def caffenet(data_layer_params,datalayer, train=True, num_classes=1000,
              classifier_name='fc8', learn_all=False):
@@ -86,28 +86,28 @@ def caffenet(data_layer_params,datalayer, train=True, num_classes=1000,
     
     
     n.conv1_1, n.relu1_1 = conv_relu(n.data, 3, 32, pad=1, param=param)     
-    n.conv1_2, n.relu1_2 = conv_relu(n.relu1_1, 3,32,stride=1, pad=1, group=1, param=param)
+    n.conv1_2, n.relu1_2 = conv_relu(n.relu1_1, 3,32, pad=1, group=1, param=param)
     
-    n.pool1 = max_pool(n.relu1_2, 2, stride=2)   #100
+    n.pool1 = max_pool(n.relu1_2, 2, stride=2)   #56
 
-    n.conv2_1, n.relu2_1 = conv_relu(n.pool1, 3, 64, pad=1, group=1, param=param)
+    n.conv2_1, n.relu2_1 = conv_relu(n.pool1, 3, 128, pad=1, group=1, param=param)
     n.conv2_2, n.relu2_2 = conv_relu(n.relu2_1, 3, 64, pad=1, group=1, param=param)
     
-    n.pool2 = max_pool(n.relu2_2, 2, stride=2)  #50
+    n.pool2 = max_pool(n.relu2_2, 2, stride=2)  #28
     
     n.conv3_1, n.relu3_1 = conv_relu(n.pool2, 3, 128, pad=1, group=1, param=param)
     n.conv3_2, n.relu3_2 = conv_relu(n.relu3_1, 3, 128, pad=1, group=1, param=param) 
     
     
-    n.pool3 = max_pool(n.relu3_2, 2, stride=2)   #25
+    n.pool3 = max_pool(n.relu3_2, 2, stride=2)   #14
     
     n.conv4_1, n.relu4_1 = conv_relu(n.pool3, 3, 256, pad=1, group=1, param=param)
     n.conv4_2, n.relu4_2 = conv_relu(n.relu4_1, 3, 256, pad=1, group=1, param=param) 
     n.conv4_3, n.relu4_3 = conv_relu(n.relu4_2, 3, 256, pad=1, group=1, param=param) 
     
-    n.pool4 = max_pool(n.relu4_3,5,stride=5)  #5
+    n.pool4 = max_pool(n.relu4_3,2,stride=2)  #7
     
-    n.fc5, n.relu5 = conv_relu(n.pool4, 5, 4096, pad=0, group=1, param=param)
+    n.fc5, n.relu5 = conv_relu(n.pool4, 7, 4096, pad=0, group=1, param=param)
     
 
     if train:        
@@ -134,45 +134,45 @@ def caffenet(data_layer_params,datalayer, train=True, num_classes=1000,
     #n.conv7_1, n.relu7_1 = conv_relu(fc6input, 1, 21, pad=0, group=1, param=param)    
 
     n.deconv5=L.Deconvolution(Deconvinput5,
-                              convolution_param=dict(kernel_w=5,kernel_h=1,stride=5,num_output=256,pad_w=0,pad_h=0,group=1,
+                              convolution_param=dict(kernel_size=7,stride=7,num_output=256,pad=0,group=1,
                                                      weight_filler=dict(type='gaussian', std=0.01),
                                                      bias_filler=dict(type='constant', value=0)),
-                              param=param)   # 5
+                              param=param)   # 1
     
     n.fused_pool4=L.Eltwise(n.deconv5,n.pool4)
     
     n.deconv4=L.Deconvolution(n.fused_pool4,
-                              convolution_param=dict(kernel_w=5,kernel_h=1,stride=5,num_output=256,pad_w=0,pad_h=0,group=1,
+                              convolution_param=dict(kernel_size=2,stride=2,num_output=256,pad_w=0,pad_h=0,group=1,
                                                      weight_filler=dict(type='gaussian', std=0.01),
                                                      bias_filler=dict(type='constant', value=0)),
-                              param=param)    # 25                         
+                              param=param)    # 3                         
         
     
     n.fused_pool3=L.Eltwise(n.deconv4,n.relu4_3)
     
     n.deconv3=L.Deconvolution(n.fused_pool3,
-                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=128,pad_w=0,pad_h=0,group=1,
+                              convolution_param=dict(kernel_size=2,stride=2,num_output=128,pad_w=0,pad_h=0,group=1,
                                                      weight_filler=dict(type='gaussian', std=0.01),
                                                      bias_filler=dict(type='constant', value=0)),
-                              param=param)  # 50
+                              param=param)  # 6
     
     n.fused_pool2=L.Eltwise(n.deconv3,n.conv3_2)
     
     n.deconv2=L.Deconvolution(n.fused_pool2,
-                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=64,pad_w=0,pad_h=0,group=1,
+                              convolution_param=dict(kernel_size=2,stride=2,num_output=64,pad_w=0,pad_h=0,group=1,
                                                      weight_filler=dict(type='gaussian', std=0.01),
                                                      bias_filler=dict(type='constant', value=0)),
                               param=param) 
     
-    n.fused_pool1=L.Eltwise(n.deconv2,n.conv2_2) # 100
+    n.fused_pool1=L.Eltwise(n.deconv2,n.conv2_2) # 12
     
     n.deconv1=L.Deconvolution(n.fused_pool1,
-                              convolution_param=dict(kernel_w=2,kernel_h=1,stride=2,num_output=32,pad_w=0,pad_h=0,group=1,
+                              convolution_param=dict(kernel_size=2,stride=2,num_output=32,pad_w=0,pad_h=0,group=1,
                                                      weight_filler=dict(type='gaussian', std=0.01),
                                                      bias_filler=dict(type='constant', value=0)),
                               param=param) 
     
-    n.fused_pool0=L.Eltwise(n.deconv1,n.conv1_2) # 200    
+    n.fused_pool0=L.Eltwise(n.deconv1,n.conv1_2) # 24    
     
     n.conv5, n.relu5 = conv_relu(n.fused_pool0, 3, 1,stride=1, pad=1, group=1, param=param)
 
@@ -195,7 +195,7 @@ def style_net(train=True, learn_all=False, subset=None):
     else:
         split='test'
     pascal_root='./'
-    data_layer_params = dict(batch_size = 100, im_shape = [100, 200], split = split, pascal_root = pascal_root,case = train)
+    data_layer_params = dict(batch_size = 20, im_shape = [112, 112],patch_ratio_w=5,patch_ratio_h=3, split = split, pascal_root = pascal_root,case = train)
     return caffenet(data_layer_params,'PascalMultilabelDataLayerSync', train=train,
                     classifier_name='fc8_flickr',
                     learn_all=learn_all)
