@@ -13,10 +13,25 @@ WORLD_SCALE = 2.60721115767
 
 style_weights="weights.pretrained.caffemodel"
 
-test_net = caffe.Net(style_net(train=False,learn_all=False),style_weights, caffe.TEST)
+test_net = caffe.Net(style_net(train=True,learn_all=False),style_weights, caffe.TEST)
 test_net.forward()
 
+from mpl_toolkits.mplot3d import Axes3D
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+X,Y=np.mgrid[:227,:227];
+surf = ax.plot_surface(X,Y,test_net.blobs['label'].data[20][0,:,:])
 
+#surf = ax.plot_surface(X,Y,test_net.blobs['deconv1'].data[20][0,:,:],color='r')
+#surf = ax.plot_surface(X,Y,ttt,color='r')
+plt.show()
+
+from mpl_toolkits.mplot3d import Axes3D
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+X,Y=np.mgrid[:227,:227];
+surf = ax.plot_surface(X,Y,test_net.blobs['deconv1'].data[20][0,:,:],color='r')
+plt.show()
 #for i in range (0, test_net.blobs['label'].data.shape[0]-1):
 #    
 #    plt.plot(test_net.blobs['label'].data[i][0,0,:])

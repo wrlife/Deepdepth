@@ -52,17 +52,45 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
         # Create a batch loader to load the images.
         self.batch_loader = BatchLoader(params, None)
 
+        self.lrw=720/params['patch_ratio_w']
+        self.lrh=240/params['patch_ratio_h']
+
         # === reshape tops ===
         # since we use a fixed input image size, we can shape the data layer
         # once. Else, we'd have to do it in the reshape call.
         top[0].reshape(
-            self.batch_size, 3, 1, params['im_shape'][1])
+            self.batch_size, 3, params['im_shape'][0], params['im_shape'][1])
         # Note the 20 channels (because PASCAL has 20 classes.)
         if params['case']:
-            top[1].reshape(self.batch_size, 1,1,  params['im_shape'][1])
+            top[1].reshape(self.batch_size, 1,params['im_shape'][0],  params['im_shape'][1])
 
         print_info("PascalMultilabelDataLayerSync", params)
 
+    #A function randomly pick patch
+    def randompatch(self,im,depth=None):
+       
+        self.transformer=SimpleTransformer()
+        
+        params = eval(self.param_str)
+
+        i=randint(0,240-self.lrh)
+        j=randint(0,720-self.lrw)
+        
+        impatch=im[i:i+self.lrh,j:j+self.lrw,:]
+
+        impatch=scipy.misc.imresize(impatch,params['im_shape'])
+        
+        if depth is not None:
+            depthpatch=depth[i:i+self.lrh,j:j+self.lrw]
+            depthpatch=cv2.resize(depthpatch,(params['im_shape'][1],params['im_shape'][0]))
+            depthpatch=depthpatch[np.newaxis,:,:]
+            return self.transformer.preprocess(impatch),depthpatch 
+        else:
+
+            return self.transformer.preprocess(impatch)
+
+
+   
     def forward(self, bottom, top):
         """
         Load data.
@@ -84,22 +112,27 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
                 if itt % 5==0: 
                     im, multilabel = self.batch_loader.load_next_image_depth(x,y,camera)
                 # Use the batch loader to load the next image.
-                #im, multilabel = self.batch_loader.load_next_image()
+                impatch,depthpatch=self.randompatch(im,multilabel)
 
-                # Add directly to the caffe data layer
-                #Split image into 1 d array
-                i=randint(0,params['im_shape'][0]-1) 
-                top[0].data[itt, ...] = im[:,i,:][:,np.newaxis,:]
-                top[1].data[itt, ...] = multilabel[:,i,:][:,np.newaxis,:]
+                top[0].data[itt, ...] = impatch#im[:,i,:][:,np.newaxis,:]
+                top[1].data[itt, ...] = depthpatch#multilabel[:,i,:][:,np.newaxis,:]
 
         else:
             im = self.batch_loader.load_test_image()
 
-            for itt in range(self.batch_size):
+            #for itt in range(self.batch_size):
 
-                top[0].data[itt, ...] = im[:,itt,:][:,np.newaxis,:]
+            for itt in range((params['patch_ratio_h'])):
+                for itj in range((params['patch_ratio_w'])):
+
+                    impatch=scipy.misc.imresize(im[itt*self.lrh:(itt+1)*self.lrh,itj*self.lrw:(itj+1)*self.lrw,:],params['im_shape'])
+                    
+
+                    top[0].data[itt, ...] = self.transformer.preprocess(impatch)
 
 
+
+    
     def reshape(self, bottom, top):
         """
         There is no need to reshape the data, since the input is of fixed size
@@ -155,7 +188,7 @@ class BatchLoader(object):
         image_file_name = index
         im = np.asarray(Image.open(
             osp.join(self.pascal_root, 'data/phantom/images', image_file_name)))
-        im = scipy.misc.imresize(im, self.im_shape)  # resize
+        #im = scipy.misc.imresize(im, self.im_shape)  # resize
 
         # do a simple horizontal flip as data augmentation
         #flip = np.random.choice(2)*2-1
@@ -164,11 +197,11 @@ class BatchLoader(object):
         # Load and prepare ground truth
     
         z_gt=np.fromfile(osp.join(self.pascal_root,'data/phantom/gt_surfaces', image_file_name)+'.bin', dtype=np.float32).reshape( camera.height, camera.width)
-        z_gt=cv2.resize(z_gt,(self.im_shape[1],self.im_shape[0]))
-        z_gt=z_gt[np.newaxis,:,:]
+        #z_gt=cv2.resize(z_gt,(self.im_shape[1],self.im_shape[0]))
+        #z_gt=z_gt[np.newaxis,:,:]
 
         self._cur += 1
-        return self.transformer.preprocess(im), z_gt
+        return im,z_gt #self.transformer.preprocess(im), z_gt
     
     def load_test_image(self):
          # Did we finish an epoch?
@@ -183,9 +216,9 @@ class BatchLoader(object):
         image_file_name = index
         im = np.asarray(Image.open(
             osp.join(self.pascal_root, 'data/phantom/test_images', image_file_name)))
-        im = scipy.misc.imresize(im, self.im_shape)  # resize
+        #im = scipy.misc.imresize(im, self.im_shape)  # resize
 
-        return self.transformer.preprocess(im)
+        return im #self.transformer.preprocess(im)
 
 
 def load_pascal_annotation(index, pascal_root):
