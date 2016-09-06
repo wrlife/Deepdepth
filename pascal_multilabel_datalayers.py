@@ -51,6 +51,8 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
 
         # Create a batch loader to load the images.
         self.batch_loader = BatchLoader(params, None)
+        
+        self.transformer=SimpleTransformer()
 
         self.lrw=720/params['patch_ratio_w']
         self.lrh=240/params['patch_ratio_h']
@@ -69,7 +71,7 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
     #A function randomly pick patch
     def randompatch(self,im,depth=None):
        
-        self.transformer=SimpleTransformer()
+        
         
         params = eval(self.param_str)
 
@@ -121,14 +123,15 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
             im = self.batch_loader.load_test_image()
 
             #for itt in range(self.batch_size):
-
+            count=0
             for itt in range((params['patch_ratio_h'])):
                 for itj in range((params['patch_ratio_w'])):
 
                     impatch=scipy.misc.imresize(im[itt*self.lrh:(itt+1)*self.lrh,itj*self.lrw:(itj+1)*self.lrw,:],params['im_shape'])
                     
 
-                    top[0].data[itt, ...] = self.transformer.preprocess(impatch)
+                    top[0].data[count, ...] = self.transformer.preprocess(impatch)
+                    count=count+1
 
 
 
