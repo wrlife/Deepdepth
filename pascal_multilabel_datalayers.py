@@ -64,7 +64,7 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
             self.batch_size, 3, params['im_shape'][0], params['im_shape'][1])
         # Note the 20 channels (because PASCAL has 20 classes.)
         if params['case']:
-            top[1].reshape(self.batch_size, 1,params['im_shape'][0],  params['im_shape'][1])
+            top[1].reshape(self.batch_size, 1,params['im_shape'][0]/3-1,  params['im_shape'][1]/3-1)
 
         print_info("PascalMultilabelDataLayerSync", params)
 
@@ -84,7 +84,7 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
         
         if depth is not None:
             depthpatch=depth[i:i+self.lrh,j:j+self.lrw]
-            depthpatch=cv2.resize(depthpatch,(params['im_shape'][1],params['im_shape'][0]))
+            depthpatch=cv2.resize(depthpatch,(params['im_shape'][1]/3-1,params['im_shape'][0]/3-1),cv2.INTER_AREA)
             depthpatch=depthpatch[np.newaxis,:,:]
             return self.transformer.preprocess(impatch),depthpatch 
         else:

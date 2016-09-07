@@ -19,7 +19,7 @@ test_net=style_net(train=True,learn_all=True)
 
 style_solver_filename = solver(test_net,base_lr=base_lr)
 style_solver = caffe.get_solver(style_solver_filename)
-style_solver.net.copy_from(weights)
+#style_solver.net.copy_from(weights)
 
 print 'Running solvers for %d iterations...' % niter
 

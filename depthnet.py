@@ -151,41 +151,41 @@ def caffenet(data_layer_params,datalayer, train=True, num_classes=1000,
     n.fused_pool5=L.Eltwise(n.deconv5,n.pool5)
     
     n.deconv4=L.Deconvolution(n.fused_pool5,
-                              convolution_param=dict(kernel_size=2,stride=2,num_output=512,pad_w=0,pad_h=0,group=2,
+                              convolution_param=dict(kernel_size=4,stride=4,num_output=256,pad_w=0,pad_h=0,group=2,
                                                      weight_filler=dict(type='gaussian', std=0.01),
                                                      #bias_term=False),param = [dict(lr_mult=1, decay_mult=0.00000005)])
                                                      bias_filler=dict(type='constant', value=0)),
-                              param=learned_param)    # 14                        
+                              param=learned_param)    # 28                        
         
     
-    n.fused_pool4=L.Eltwise(n.deconv4,n.pool4)
+#    n.fused_pool4=L.Eltwise(n.deconv4,n.pool4)
+#    
+#    n.deconv3=L.Deconvolution(n.fused_pool4,
+#                              convolution_param=dict(kernel_size=2,stride=2,num_output=256,pad_w=0,pad_h=0,group=2,
+#                                                     weight_filler=dict(type='gaussian', std=0.01),
+#                                                     #bias_term=False),param = [dict(lr_mult=1, decay_mult=0.00000005)])
+#                                                     bias_filler=dict(type='constant', value=0)),
+#                              param=learned_param)  # 28
     
-    n.deconv3=L.Deconvolution(n.fused_pool4,
-                              convolution_param=dict(kernel_size=2,stride=2,num_output=256,pad_w=0,pad_h=0,group=2,
-                                                     weight_filler=dict(type='gaussian', std=0.01),
-                                                     #bias_term=False),param = [dict(lr_mult=1, decay_mult=0.00000005)])
-                                                     bias_filler=dict(type='constant', value=0)),
-                              param=learned_param)  # 28
-    
-    n.fused_pool3=L.Eltwise(n.deconv3,n.pool3)
+    n.fused_pool3=L.Eltwise(n.deconv4,n.pool3)
     
     n.deconv2=L.Deconvolution(n.fused_pool3,
-                              convolution_param=dict(kernel_size=2,stride=2,num_output=128,pad_w=0,pad_h=0,group=1,
+                              convolution_param=dict(kernel_size=4,stride=4,num_output=64,pad_w=0,pad_h=0,group=1,
                                                      weight_filler=dict(type='gaussian', std=0.01),
                                                      #bias_term=False),param = [dict(lr_mult=1, decay_mult=0.00000005)])
                                                      bias_filler=dict(type='constant', value=0)),
-                              param=learned_param) 
+                              param=learned_param)   
     
-    n.fused_pool2=L.Eltwise(n.deconv2,n.pool2) # 56
-    
-    n.deconv1=L.Deconvolution(n.fused_pool2,
-                              convolution_param=dict(kernel_size=2,stride=2,num_output=64,pad_w=0,pad_h=0,group=1,
-                                                     weight_filler=dict(type='gaussian', std=0.01),
-                                                     #bias_term=False),param = [dict(lr_mult=1, decay_mult=0.00000005)])
-                                                     bias_filler=dict(type='constant', value=0)),
-                              param=learned_param) 
+#    n.fused_pool2=L.Eltwise(n.deconv2,n.pool2) # 56
+#    
+#    n.deconv1=L.Deconvolution(n.fused_pool2,
+#                              convolution_param=dict(kernel_size=2,stride=2,num_output=64,pad_w=0,pad_h=0,group=1,
+#                                                     weight_filler=dict(type='gaussian', std=0.01),
+#                                                     #bias_term=False),param = [dict(lr_mult=1, decay_mult=0.00000005)])
+#                                                     bias_filler=dict(type='constant', value=0)),
+#                              param=learned_param) 
                               
-    n.fused_pool1=L.Eltwise(n.deconv1,n.pool1)     #112
+    n.fused_pool1=L.Eltwise(n.deconv2,n.pool1)     #112
 
     n.deconv1=L.Deconvolution(n.fused_pool1,
                               convolution_param=dict(kernel_size=2,stride=2,num_output=1,pad_w=0,pad_h=0,group=1,
@@ -196,15 +196,15 @@ def caffenet(data_layer_params,datalayer, train=True, num_classes=1000,
     n.m_score = L.Crop(n.deconv1, n.data,crop_param=dict(axis=2,offset=53))
     #n.fused_pool0=L.Eltwise(n.deconv1,n.conv1_2) # 227    
     
-    #n.conv0, n.relu0 = conv_relu(n.m_score, 1)
+    n.conv0, n.relu0 = conv_relu(n.m_score, 1,ks=6,stride=3,pad=0)
 
 
     #if not train:
         #n.probs = L.Power(n.relu5)
     if train:
         #n.loss = L.EuclideanLoss(n.deconv1, n.label,loss_weight=0.5)
-        n.loss=L.Python(n.m_score, n.label,module='myLoss',layer='Gradient_Apperance_Loss',loss_weight=0.5)        
-        n.acc = L.Accuracy(n.m_score, n.label)
+        n.loss=L.Python(n.conv0, n.label,module='myLoss',layer='Gradient_Apperance_Loss',loss_weight=0.5)        
+        n.acc = L.Accuracy(n.conv0, n.label)
     # write the net to a temporary file and return its filename
     with tempfile.NamedTemporaryFile(delete=False) as f:
         f.write(str(n.to_proto()))
