@@ -36,7 +36,8 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
 
     def setup(self, bottom, top):
 
-        self.top_names = ['data', 'label']
+        #self.top_names = ['data','pos','label']
+        self.top_names = ['data','label']
 
         # === Read input parameters ===
 
@@ -54,42 +55,57 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
         
         self.transformer=SimpleTransformer()
 
-        self.lrw=720/params['patch_ratio_w']
-        self.lrh=240/params['patch_ratio_h']
+        self.lrw=params['im_shape'][1]#720/params['patch_ratio_w']
+        self.lrh=params['im_shape'][0]#240/params['patch_ratio_h']
 
         # === reshape tops ===
         # since we use a fixed input image size, we can shape the data layer
         # once. Else, we'd have to do it in the reshape call.
         top[0].reshape(
             self.batch_size, 3, params['im_shape'][0], params['im_shape'][1])
+        #top[1].reshape(self.batch_size,2,params['im_shape'][0], params['im_shape'][1])
         # Note the 20 channels (because PASCAL has 20 classes.)
         if params['case']:
             top[1].reshape(self.batch_size, 1,params['im_shape'][0],  params['im_shape'][1])
+            #top[1].reshape(self.batch_size, 1,1, 1)
+            
+
 
         print_info("PascalMultilabelDataLayerSync", params)
+        self.rowcount=0
 
     #A function randomly pick patch
-    def randompatch(self,im,depth=None):
+    def randompatch(self,im,x,y,depth=None):
        
-        
-        
+      
         params = eval(self.param_str)
 
-        i=randint(0,240-self.lrh)
-        j=randint(0,720-self.lrw)
+        
+        i=randint(0,im.shape[0]-self.lrh)
+        j=randint(0,im.shape[1]-self.lrw)
         
         impatch=im[i:i+self.lrh,j:j+self.lrw,:]
+        
+        #Add two more dimension about the relative position of each pixel in the image
+        imposition=np.zeros((2,self.lrh,self.lrw))
+        
+        for u in range(self.lrh):
+            for v in range(self.lrw):
+                
+                imposition[:,u,v]=np.array([x[i+u,j+v],y[i+u,j+v]])
 
-        impatch=scipy.misc.imresize(impatch,params['im_shape'])
+        impatch=self.transformer.preprocess(impatch)
+
         
         if depth is not None:
             depthpatch=depth[i:i+self.lrh,j:j+self.lrw]
-            depthpatch=cv2.resize(depthpatch,(params['im_shape'][1],params['im_shape'][0]))
-            depthpatch=depthpatch[np.newaxis,:,:]
-            return self.transformer.preprocess(impatch),depthpatch 
+            #depthpatch=cv2.resize(depthpatch,(self.lrw,self.lrh))
+            depthpatch=depthpatch[:,:,np.newaxis].transpose((2,0,1))
+            
+            return impatch,imposition,depthpatch 
         else:
 
-            return self.transformer.preprocess(impatch)
+            return impatch,pos
 
 
    
@@ -98,42 +114,69 @@ class PascalMultilabelDataLayerSync(caffe.Layer):
         Load data.
         """
         params = eval(self.param_str)
+        scene_manager = SceneManager(osp.join(params['pascal_root'], 'data/phantom/sfm_results/'))
+        scene_manager.load_cameras()
+        camera = scene_manager.cameras[1] # assume single camera
+
+        # initial values on unit sphere
+        x, y = camera.get_image_grid()
+        r_scale = np.sqrt(x * x + y * y + 1.)
         
         if params['case']:
-            scene_manager = SceneManager(osp.join(params['pascal_root'], 'data/phantom/sfm_results/'))
-            scene_manager.load_cameras()
-            camera = scene_manager.cameras[1] # assume single camera
-
-            # initial values on unit sphere
-            x, y = camera.get_image_grid()
-            r_scale = np.sqrt(x * x + y * y + 1.)
-
-             
             for itt in range(self.batch_size):
             
                 if itt % 5==0: 
                     im, multilabel = self.batch_loader.load_next_image_depth(x,y,camera)
                 # Use the batch loader to load the next image.
-                impatch,depthpatch=self.randompatch(im,multilabel)
+                impatch,pos,depthpatch=self.randompatch(im,x,y,multilabel)
 
                 top[0].data[itt, ...] = impatch#im[:,i,:][:,np.newaxis,:]
-                top[1].data[itt, ...] = depthpatch#multilabel[:,i,:][:,np.newaxis,:]
-
+                #top[2].data[itt, ...] = depthpatch[2,:,:]#[:,params['im_shape'][1]/2,params['im_shape'][0]/2]#multilabel[:,i,:][:,np.newaxis,:]
+                top[1].data[itt, ...] = depthpatch#pos#[:,np.newaxis,np.newaxis]
         else:
             im = self.batch_loader.load_test_image()
-
+#            count=0
+#            imresized=cv2.resize(im,(params['im_shape'][1],params['im_shape'][0]))
+#            top[0].data[count, ...] = self.transformer.preprocess(imresized)
+            
+            
+            impatch=im[0:self.lrh,0:self.lrw,:]
+            
+            top[0].data[0, ...] = self.transformer.preprocess(impatch)
+#            impatch=im[2:2+self.lrh,2:2+self.lrw,:]
+#            
+#            top[0].data[1, ...] = self.transformer.preprocess(impatch)
+            
+            
             #for itt in range(self.batch_size):
-            count=0
-            for itt in range((params['patch_ratio_h'])):
-                for itj in range((params['patch_ratio_w'])):
+#            count=0
+#            interval=10
+#            for i in range(0,70):
+#                
+#
+#                    impatch=im[self.rowcount*interval:self.rowcount*interval+self.lrh,i*interval:i*interval+self.lrw,:]
+#                    
+#
+#                    top[0].data[count, ...] = self.transformer.preprocess(impatch)
+#                    count=count+1
+#                    
+#            self.rowcount=self.rowcount+1
+#            count=0
+#            for itt in range((params['patch_ratio_h'])):
+#                for itj in range((params['patch_ratio_w'])):
+#
+#                    impatch=scipy.misc.imresize(im[itt*self.lrh:(itt+1)*self.lrh,itj*self.lrw:(itj+1)*self.lrw,:],params['im_shape'])
+#                    imposition=np.zeros((2,self.lrh,self.lrw))
+#                    for u in range(self.lrh):
+#                        for v in range(self.lrw):
+#                            
+#                            imposition[:,u,v]=np.array([x[itt*self.lrh+u,itj*self.lrw+v],y[itt*self.lrh+u,itj*self.lrw+v]])
+#
+#                    top[0].data[count, ...] = self.transformer.preprocess(impatch)
+#                    top[1].data[count,...] = imposition
+#                    count=count+1
 
-                    impatch=scipy.misc.imresize(im[itt*self.lrh:(itt+1)*self.lrh,itj*self.lrw:(itj+1)*self.lrw,:],params['im_shape'])
-                    
-
-                    top[0].data[count, ...] = self.transformer.preprocess(impatch)
-                    count=count+1
-
-
+        
 
     
     def reshape(self, bottom, top):
@@ -191,6 +234,10 @@ class BatchLoader(object):
         image_file_name = index
         im = np.asarray(Image.open(
             osp.join(self.pascal_root, 'data/phantom/images', image_file_name)))
+            
+        im = cv2.pyrDown(im)
+        
+        
         #im = scipy.misc.imresize(im, self.im_shape)  # resize
 
         # do a simple horizontal flip as data augmentation
@@ -200,6 +247,8 @@ class BatchLoader(object):
         # Load and prepare ground truth
     
         z_gt=np.fromfile(osp.join(self.pascal_root,'data/phantom/gt_surfaces', image_file_name)+'.bin', dtype=np.float32).reshape( camera.height, camera.width)
+        z_gt=cv2.pyrDown(z_gt)
+        #xyz_gt=np.dstack((x, y, np.ones_like(x))) *z_gt[:,:,np.newaxis]
         #z_gt=cv2.resize(z_gt,(self.im_shape[1],self.im_shape[0]))
         #z_gt=z_gt[np.newaxis,:,:]
 
@@ -220,7 +269,7 @@ class BatchLoader(object):
         im = np.asarray(Image.open(
             osp.join(self.pascal_root, 'data/phantom/test_images', image_file_name)))
         #im = scipy.misc.imresize(im, self.im_shape)  # resize
-
+        im = cv2.pyrDown(im)
         return im #self.transformer.preprocess(im)
 
 

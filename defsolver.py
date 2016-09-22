@@ -69,18 +69,22 @@ def run_solvers(niter, solvers, disp_interval=20):
        returning the loss and accuracy recorded each iteration.
        `solvers` is a list of (name, solver) tuples."""
     blobs = ('loss', 'acc')
-    loss, acc = ({name: np.zeros(niter) for name, _ in solvers}
-                 for _ in blobs)
+    #blobs = ('loss')
+    loss,acc = ({name: np.zeros(niter) for name, _ in solvers} for _ in blobs)
+                 
     for it in range(niter):
         for name, s in solvers:
             s.step(1)  # run a single SGD step in Caffe
-            loss[name][it], acc[name][it] = (s.net.blobs[b].data.copy()
-                                             for b in blobs)
-                                    
+#            loss[name][it],acc[name][it] = (s.net.blobs[b].data.copy()
+#                                             for b in blobs)
+            loss[name][it]=s.net.blobs['loss'].data.copy()                        
         if it % disp_interval == 0 or it + 1 == niter:
             loss_disp = '; '.join('%s: loss=%.3f, acc=%2d%%' %
                                   (n, loss[n][it], np.round(100*acc[n][it]))
                                   for n, _ in solvers)
+#            loss_disp = '; '.join('%s: loss=%.3f' %
+#                                  (n, loss[n][it])
+#                                  for n, _ in solvers)                                      
        
             print '%3d) %s' % (it, loss_disp)     
     # Save the learned weights from both nets.
@@ -90,7 +94,8 @@ def run_solvers(niter, solvers, disp_interval=20):
         filename = 'weights.%s.caffemodel' % name
         weights[name] = os.path.join(weight_dir, filename)
         s.net.save(weights[name])
-    return loss, acc, weights
+#    return loss, acc, weights
+    return loss,  weights
     
     
 def eval_style_net(weights, test_iters=10):
